@@ -83,6 +83,25 @@ static struct {
     struct arg_end *end;
 } join_args;
 
+/** Arguments used by send_icmp function */
+static struct {
+    struct arg_int *ipAddress;
+    struct arg_int *count;
+    struct arg_int *timeout;
+    struct arg_int *delay;
+    struct arg_end *end;
+} ping_args;
+
+static int send_icmp(int argc, char **argv)
+{
+    int nerrors = arg_parse(argc, argv, (void **) &ping_args);
+    if (nerrors != 0) {
+        arg_print_errors(stderr, join_args.end, argv[0]);
+        return 1;
+    }
+    return 0;
+}
+
 static int connect(int argc, char **argv)
 {
     int nerrors = arg_parse(argc, argv, (void **) &join_args);
@@ -125,4 +144,21 @@ void register_wifi(void)
     };
 
     ESP_ERROR_CHECK( esp_console_cmd_register(&join_cmd) );
+}
+
+void register_ping(void)
+{
+    ping_args.ipAddress = arg_int0(NULL, "ip", "<IPv4/IPv6>", "Target IP Address");
+    ping_args.timeout = arg_int0(NULL, "timeout", "<t>", "Connection timeout, ms");
+    ping_args.count = arg_int0(NULL, "count", "<n>", "Number of messages");
+    ping_args.delay= arg_int0(NULL, "delay", "<t>", "Delay between messges, ms");
+    ping_args.end = arg_end(1);
+    const esp_console_cmd_t ping_cmd = {
+        .command = "ping",
+        .help = "Send an ICMP message to an IPv4/IPv6 address",
+        .hint = "<IP address>",
+        .func = &send_icmp,
+        .argtable = &ping_args
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&ping_cmd) );
 }
