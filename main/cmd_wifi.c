@@ -25,6 +25,7 @@
 #define DEFAULT_COUNT 5
 #define DEFAULT_TIMEOUT 1000    // unit = ms
 #define DEFAULT_DELAY 500       // unit = ms
+#define FAILURE -1
 
 #define JOIN_TIMEOUT_MS (10000)
 
@@ -98,42 +99,51 @@ static bool wifi_join(const char *ssid, const char *pass, int timeout_ms)
     return (bits & CONNECTED_BIT) != 0;
 }
 
-static int send_icmp(int argc, char **argv)
+static void parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32_t *timeout, uint32_t *delay)
 {
-    ip4_addr_t target_ip;
-    // initialize optional arguments to default values
-    uint32_t ping_count     = DEFAULT_COUNT;
-    uint32_t ping_timeout   = DEFAULT_TIMEOUT;
-    uint32_t ping_delay     = DEFAULT_DELAY;
-
-    int nerrors = arg_parse(argc, argv, (void **) &ping_args);
-    if (nerrors != 0) {
-        arg_print_errors(stderr, ping_args.end, argv[0]);
-        return 1;
-    }
     if (ping_args.ipAddress->count > 0)
     {
         // Prepare the IP address into correct struct
-        target_ip.addr = *ping_args.ipAddress->ival;
+        // target_ip.addr = *ping_args.ipAddress->ival;
+        printf("IP address enterd!\n");
     }
 
     if (ping_args.count->count > 0)
     {
-        ping_count = *ping_args.count->ival;
+        *count= *ping_args.count->ival;
     }
 
     if (ping_args.timeout->count > 0)
     {
-        ping_timeout = *ping_args.timeout->ival;
+        *timeout = *ping_args.timeout->ival;
     }
     if (ping_args.delay->count > 0)
     {
-        ping_delay = *ping_args.delay->ival;
+        *delay = *ping_args.delay->ival;
+    }
+}
+
+static int send_icmp(int argc, char **argv)
+{
+    ip4_addr_t target_ipv4;
+    // initialize optional arguments to default values
+    uint32_t ping_count     = DEFAULT_COUNT;
+    uint32_t ping_timeout   = DEFAULT_TIMEOUT;
+    uint32_t ping_delay     = DEFAULT_DELAY;
+    // TO DO: IPv6
+    ip6_addr_t target_ipv6;
+
+    int nerrors = arg_parse(argc, argv, (void **) &ping_args);
+    if (nerrors != 0) {
+        arg_print_errors(stderr, ping_args.end, argv[0]);
+        return FAILURE;
     }
 
+    parse_args(&target_ipv4, &target_ipv6, &ping_count, &ping_timeout, &ping_delay);
+
     // For compiler to stop complaining about 'UNSED Variables'
-    printf("All params: target_ip(%d), count(%d), timeout(%d), delay(%d)\n",
-            target_ip.addr, ping_count, ping_timeout, ping_delay);
+    printf("All params: target_ip4(%d), target_ipv6(%d), count(%d), timeout(%d), delay(%d)\n",
+            target_ipv4.addr,target_ipv6.addr[0], ping_count, ping_timeout, ping_delay);
 
     return 0;
 }
