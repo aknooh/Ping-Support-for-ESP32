@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "esp_log.h"
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
@@ -19,11 +20,33 @@
 #include "tcpip_adapter.h"
 #include "esp_event.h"
 #include "cmd_wifi.h"
+#include "lwip/inet.h"
+
+#define DEFAULT_COUNT 5
+#define DEFAULT_TIMEOUT 1000    // unit = ms
+#define DEFAULT_DELAY 500       // unit = ms
 
 #define JOIN_TIMEOUT_MS (10000)
 
 static EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
+
+/** Arguments used by 'join' function */
+static struct {
+    struct arg_int *timeout;
+    struct arg_str *ssid;
+    struct arg_str *password;
+    struct arg_end *end;
+} join_args;
+
+/** Arguments used by 'send_icmp' function */
+static struct {
+    struct arg_int *ipAddress;
+    struct arg_int *count;
+    struct arg_int *timeout;
+    struct arg_int *delay;
+    struct arg_end *end;
+} ping_args;
 
 
 static void event_handler(void* arg, esp_event_base_t event_base,
@@ -75,30 +98,43 @@ static bool wifi_join(const char *ssid, const char *pass, int timeout_ms)
     return (bits & CONNECTED_BIT) != 0;
 }
 
-/** Arguments used by 'join' function */
-static struct {
-    struct arg_int *timeout;
-    struct arg_str *ssid;
-    struct arg_str *password;
-    struct arg_end *end;
-} join_args;
-
-/** Arguments used by send_icmp function */
-static struct {
-    struct arg_int *ipAddress;
-    struct arg_int *count;
-    struct arg_int *timeout;
-    struct arg_int *delay;
-    struct arg_end *end;
-} ping_args;
-
 static int send_icmp(int argc, char **argv)
 {
+    ip4_addr_t target_ip;
+    // initialize optional arguments to default values
+    uint32_t ping_count     = DEFAULT_COUNT;
+    uint32_t ping_timeout   = DEFAULT_TIMEOUT;
+    uint32_t ping_delay     = DEFAULT_DELAY;
+
     int nerrors = arg_parse(argc, argv, (void **) &ping_args);
     if (nerrors != 0) {
-        arg_print_errors(stderr, join_args.end, argv[0]);
+        arg_print_errors(stderr, ping_args.end, argv[0]);
         return 1;
     }
+    if (ping_args.ipAddress->count > 0)
+    {
+        // Prepare the IP address into correct struct
+        target_ip.addr = *ping_args.ipAddress->ival;
+    }
+
+    if (ping_args.count->count > 0)
+    {
+        ping_count = *ping_args.count->ival;
+    }
+
+    if (ping_args.timeout->count > 0)
+    {
+        ping_timeout = *ping_args.timeout->ival;
+    }
+    if (ping_args.delay->count > 0)
+    {
+        ping_delay = *ping_args.delay->ival;
+    }
+
+    // For compiler to stop complaining about 'UNSED Variables'
+    printf("All params: target_ip(%d), count(%d), timeout(%d), delay(%d)\n",
+            target_ip.addr, ping_count, ping_timeout, ping_delay);
+
     return 0;
 }
 
@@ -148,7 +184,7 @@ void register_wifi(void)
 
 void register_ping(void)
 {
-    ping_args.ipAddress = arg_int0(NULL, "ip", "<IPv4/IPv6>", "Target IP Address");
+    ping_args.ipAddress = arg_intn(NULL, "ip", "<IPv4/IPv6>", 0, INT_MAX, "Target IP Address");
     ping_args.timeout = arg_int0(NULL, "timeout", "<t>", "Connection timeout, ms");
     ping_args.count = arg_int0(NULL, "count", "<n>", "Number of messages");
     ping_args.delay= arg_int0(NULL, "delay", "<t>", "Delay between messges, ms");
