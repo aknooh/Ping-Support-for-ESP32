@@ -21,6 +21,8 @@
 #include "cmd_wifi.h"
 #include "lwip/inet.h"
 #include <netinet/in.h>
+#include "esp_ping.h"
+#include "ping/ping.h"
 
 #define DEFAULT_COUNT 5
 #define DEFAULT_TIMEOUT 1000    // unit = ms
@@ -48,7 +50,6 @@ static struct {
     struct arg_int *delay;
     struct arg_end *end;
 } ping_args;
-
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -124,21 +125,37 @@ static void parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32
     }
 
     if (ping_args.count->count > 0)
-    {
         *count= *ping_args.count->ival;
-    }
 
     if (ping_args.timeout->count > 0)
-    {
         *timeout = *ping_args.timeout->ival;
-    }
+
     if (ping_args.delay->count > 0)
-    {
         *delay = *ping_args.delay->ival;
-    }
-    return;
 }
 
+esp_err_t ping_results(ping_target_id_t message_type, esp_ping_found *found_val)
+{
+    static int ctr;
+    // Print everything for now
+    printf("PING RESULTS\n");
+    printf("Message Type    : %d\n", message_type);
+    printf("resp_time       : %d\n", found_val->resp_time);
+    printf("timeout_count   : %d\n", found_val->timeout_count);
+    printf("send_count      : %d\n", found_val->send_count);
+    printf("recv_count      : %d\n", found_val->recv_count);
+    printf("err_count       : %d\n", found_val->err_count);
+    printf("bytes           : %d\n", found_val->bytes);
+    printf("total_bytes     : %d\n", found_val->total_bytes);
+    printf("total_time      : %d\n", found_val->total_time);
+    printf("min_time        : %d\n", found_val->min_time);
+    printf("max_time        : %d\n", found_val->max_time);
+    printf("ping_err        : %d\n\n", found_val->ping_err);
+    if (ctr++ >= *ping_args.count->ival)
+        ping_deinit();
+
+    return ESP_OK;
+}
 static int send_icmp(int argc, char **argv)
 {
     ip4_addr_t target_ipv4;
@@ -157,10 +174,18 @@ static int send_icmp(int argc, char **argv)
 
     parse_args(&target_ipv4, &target_ipv6, &ping_count, &ping_timeout, &ping_delay);
 
-    // For compiler to stop complaining about 'UNSED Variables'
-    printf("All params: target_ip4(%d), target_ipv6(%d), count(%d), timeout(%d), delay(%d)\n",
-            target_ipv4.addr,target_ipv6.addr[0], ping_count, ping_timeout, ping_delay);
-
+    int counter = 0;
+    for (counter = 0; counter < ping_count; counter++)
+    {
+        printf("Pinging IP Address \'%s\'\n", inet_ntoa(target_ipv4));
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        esp_ping_set_target(PING_TARGET_IP_ADDRESS_COUNT, &ping_count, sizeof(uint32_t));
+        esp_ping_set_target(PING_TARGET_RCV_TIMEO, &ping_timeout, sizeof(uint32_t));
+        esp_ping_set_target(PING_TARGET_DELAY_TIME, &ping_delay, sizeof(uint32_t));
+        esp_ping_set_target(PING_TARGET_IP_ADDRESS, &target_ipv4.addr, sizeof(uint32_t));
+        esp_ping_set_target(PING_TARGET_RES_FN, &ping_results, sizeof(ping_results));
+        ping_init();
+    }
     return 0;
 }
 
