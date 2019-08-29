@@ -9,7 +9,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <limits.h>
 #include "esp_log.h"
 #include "esp_console.h"
 #include "argtable3/argtable3.h"
@@ -21,6 +20,7 @@
 #include "esp_event.h"
 #include "cmd_wifi.h"
 #include "lwip/inet.h"
+#include <netinet/in.h>
 
 #define DEFAULT_COUNT 5
 #define DEFAULT_TIMEOUT 1000    // unit = ms
@@ -42,7 +42,7 @@ static struct {
 
 /** Arguments used by 'send_icmp' function */
 static struct {
-    struct arg_int *ipAddress;
+    struct arg_str *ip_address;
     struct arg_int *count;
     struct arg_int *timeout;
     struct arg_int *delay;
@@ -99,13 +99,28 @@ static bool wifi_join(const char *ssid, const char *pass, int timeout_ms)
     return (bits & CONNECTED_BIT) != 0;
 }
 
+static bool parse_ip_address(const char *address, ip4_addr_t *ipv4, ip6_addr_t *ipv6)
+{
+    // Determine if the address is IPv4 or IPv6
+    char *indicator = address;
+    while(*indicator++)
+    {
+        if (*indicator == '.') {
+            return inet_aton(address, &ipv4);
+        }
+        else if (*indicator == ':') {
+            return inet6_aton(address, &ipv6);
+        }
+    }
+    return false;
+}
+
 static void parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32_t *timeout, uint32_t *delay)
 {
-    if (ping_args.ipAddress->count > 0)
+    if (ping_args.ip_address->count > 0)
     {
-        // Prepare the IP address into correct struct
-        // target_ip.addr = *ping_args.ipAddress->ival;
-        printf("IP address enterd!\n");
+        // Parse IP address (Handle v4 and v6)
+        parse_ip_address(ping_args.ip_address->sval[0], ip4, ip6);
     }
 
     if (ping_args.count->count > 0)
@@ -121,6 +136,7 @@ static void parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32
     {
         *delay = *ping_args.delay->ival;
     }
+    return;
 }
 
 static int send_icmp(int argc, char **argv)
@@ -194,7 +210,7 @@ void register_wifi(void)
 
 void register_ping(void)
 {
-    ping_args.ipAddress = arg_intn(NULL, "ip", "<IPv4/IPv6>", 0, INT_MAX, "Target IP Address");
+    ping_args.ip_address = arg_str0(NULL, NULL, "<IPv4/IPv6>", "Target IP Address");
     ping_args.timeout = arg_int0(NULL, "timeout", "<t>", "Connection timeout, ms");
     ping_args.count = arg_int0(NULL, "count", "<n>", "Number of messages");
     ping_args.delay= arg_int0(NULL, "delay", "<t>", "Delay between messges, ms");
