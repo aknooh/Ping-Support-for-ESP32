@@ -1,0 +1,73 @@
+diff --git a/components/lwip/apps/ping/esp_ping.c b/components/lwip/apps/ping/esp_ping.c
+index 75b669412..0ffd2c0af 100644
+--- a/components/lwip/apps/ping/esp_ping.c
++++ b/components/lwip/apps/ping/esp_ping.c
+@@ -128,7 +128,7 @@ esp_err_t esp_ping_get_target(ping_target_id_t opt_id, void *opt_val, uint32_t o
+     return ret;
+ }
+ 
+-esp_err_t esp_ping_result(uint8_t res_val, uint16_t ping_len, uint32_t ping_time)
++esp_err_t esp_ping_result(uint8_t res_val, uint16_t ping_len, uint32_t ping_time, uint32_t seqno)
+ {
+     esp_err_t ret = ESP_OK;
+ 
+@@ -154,6 +154,7 @@ esp_err_t esp_ping_result(uint8_t res_val, uint16_t ping_len, uint32_t ping_time
+ 
+             ping_option_info->ping_res.total_time += ping_time;
+             ping_option_info->ping_res.recv_count ++;
++            ping_option_info->ping_res.ping_seqno = seqno;
+         }
+     }
+ 
+diff --git a/components/lwip/apps/ping/ping.c b/components/lwip/apps/ping/ping.c
+index 8b8d5512f..e77885e5f 100644
+--- a/components/lwip/apps/ping/ping.c
++++ b/components/lwip/apps/ping/ping.c
+@@ -208,7 +208,7 @@ ping_recv(int s)
+         if ((iecho->id == PING_ID) && (iecho->seqno == htons(ping_seq_num))) {
+           /* do some ping result processing */
+ #ifdef ESP_PING
+-          esp_ping_result((ICMPH_TYPE(iecho) == ICMP_ER), len, PING_TIME_DIFF_MS(now, ping_time));
++          esp_ping_result((ICMPH_TYPE(iecho) == ICMP_ER), len, PING_TIME_DIFF_MS(now, ping_time), ntohs(iecho->seqno));
+ #else
+           PING_RESULT((ICMPH_TYPE(iecho) == ICMP_ER));
+ #endif
+@@ -228,7 +228,7 @@ ping_recv(int s)
+ 
+   /* do some ping result processing */
+ #ifdef ESP_PING
+-  esp_ping_result(0, len, PING_TIME_DIFF_MS(now, ping_time));
++  esp_ping_result(0, len, PING_TIME_DIFF_MS(now, ping_time),0);
+ #else
+   PING_RESULT(0);
+ #endif
+@@ -317,7 +317,7 @@ _exit:
+   close(s);
+ 
+ _exit_new_socket_failed:
+-  esp_ping_result(PING_RES_FINISH, 0, 0);
++  esp_ping_result(PING_RES_FINISH, 0, 0, 0);
+   SYS_ARCH_PROTECT(lev);
+   if (ping_init_flag) { /* Ping closed by this thread */
+     LWIP_DEBUGF( PING_DEBUG, ("ping: closed by self "));
+diff --git a/components/lwip/include/apps/esp_ping.h b/components/lwip/include/apps/esp_ping.h
+index 9abb883c2..270e50589 100644
+--- a/components/lwip/include/apps/esp_ping.h
++++ b/components/lwip/include/apps/esp_ping.h
+@@ -42,6 +42,7 @@ typedef struct _ping_found {
+     uint32_t total_time;
+     uint32_t min_time;
+     uint32_t max_time;
++    uint32_t ping_seqno;
+     int8_t  ping_err;
+ } esp_ping_found;
+ 
+@@ -102,7 +103,7 @@ esp_err_t esp_ping_get_target(ping_target_id_t opt_id, void *opt_val, uint32_t o
+  *      - ESP_OK
+  *      - ESP_ERR_PING_INVALID_PARAMS
+  */
+-esp_err_t esp_ping_result(uint8_t res_val, uint16_t res_len, uint32_t res_time);
++esp_err_t esp_ping_result(uint8_t res_val, uint16_t res_len, uint32_t res_time, uint32_t seqno);
+ 
+ #ifdef __cplusplus
+ }

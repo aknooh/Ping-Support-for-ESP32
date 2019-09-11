@@ -148,24 +148,33 @@ static esp_err_t parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, u
 esp_err_t ping_results(ping_target_id_t message_type, esp_ping_found *found_val)
 {
     static int ctr;
-    // Print everything for now
-	/*
-    printf("PING RESULTS\n");
-    printf("Message Type    : %d\n", message_type);
-    printf("resp_time       : %d\n", found_val->resp_time);
-    printf("timeout_count   : %d\n", found_val->timeout_count);
-    printf("send_count      : %d\n", found_val->send_count);
-    printf("recv_count      : %d\n", found_val->recv_count);
-    printf("err_count       : %d\n", found_val->err_count);
-    printf("bytes           : %d\n", found_val->bytes);
-    printf("total_bytes     : %d\n", found_val->total_bytes);
-    printf("total_time      : %d\n", found_val->total_time);
-    printf("min_time        : %d\n", found_val->min_time);
-    printf("max_time        : %d\n", found_val->max_time);
-    printf("ping_err        : %d\n\n", found_val->ping_err);
-	*/
-    if (ctr++ >= *ping_args.count->ival)
-        ping_deinit();
+    ip4_addr_t target_ipv4;
+	uint32_t ping_count = 0;
+	esp_ping_get_target(PING_TARGET_IP_ADDRESS, &target_ipv4.addr, sizeof(uint32_t));
+	esp_ping_get_target(PING_TARGET_IP_ADDRESS_COUNT, &ping_count, sizeof(uint32_t));
+
+	if (found_val->ping_err != 2)
+	{
+		fprintf(stdout, "%d bytes from %s: icmp_seq=%d time=%d ms\n",
+				found_val->bytes, inet_ntoa(target_ipv4), found_val->ping_seqno, found_val->resp_time);
+	} else {
+		fprintf(stdout, ".");
+		fflush(stdout);
+	}
+
+
+    if (++ctr >= ping_count) {
+		int32_t packet_loss = ( 1-((found_val->recv_count * 1.0) / found_val->send_count)) * 100;
+		fprintf(stdout, "\n--- %s ping statistics ---\n", inet_ntoa(target_ipv4));
+		fprintf(stdout, "%d packets transmitted, %d received, %d%% packet loss, time %dms\n",
+				found_val->send_count, found_val->recv_count, packet_loss, found_val->total_time);
+		fprintf(stdout, "rtt min/avg/max = %d/%1.2f/%d ms\n", found_val->min_time,
+				(found_val->total_time * 1.0) / found_val->recv_count, found_val->max_time);
+		// clean up time
+		memset(found_val, 0, sizeof(esp_ping_found));
+		ctr = 0;
+	}
+	ping_deinit();
 
     return ESP_OK;
 }
@@ -201,6 +210,7 @@ static esp_err_t send_icmp(int argc, char **argv)
 			esp_ping_set_target(PING_TARGET_DELAY_TIME, &ping_delay, sizeof(uint32_t));
 			esp_ping_set_target(PING_TARGET_IP_ADDRESS, &target_ipv4.addr, sizeof(uint32_t));
 			esp_ping_set_target(PING_TARGET_RES_FN, &ping_results, sizeof(ping_results));
+			esp_ping_set_target(PING_TARGET_DATA_LEN, &packet_size, sizeof(uint32_t));
 			ping_init();
 		}
 	} else
