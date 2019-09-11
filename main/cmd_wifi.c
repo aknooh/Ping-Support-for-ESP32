@@ -24,10 +24,11 @@
 #include "esp_ping.h"
 #include "ping/ping.h"
 
-#define DEFAULT_COUNT 5
-#define DEFAULT_TIMEOUT 1000    // unit = ms
-#define DEFAULT_DELAY 500       // unit = ms
-#define FAILURE -1
+#define DEFAULT_COUNT (5)
+#define DEFAULT_TIMEOUT (1000)    // unit = ms
+#define DEFAULT_DELAY (500)       // unit = ms
+#define DEFAULT_DATA_SIZE (32)	// bytes
+#define FAILURE (-1)
 
 #define JOIN_TIMEOUT_MS (10000)
 
@@ -48,6 +49,7 @@ static struct {
     struct arg_int *count;
     struct arg_int *timeout;
     struct arg_int *delay;
+	struct arg_int *packet_size;
     struct arg_end *end;
 } ping_args;
 
@@ -116,7 +118,7 @@ static bool parse_ip_address(const char *address, ip4_addr_t *ipv4, ip6_addr_t *
     return false;
 }
 
-static esp_err_t parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32_t *timeout, uint32_t *delay)
+static esp_err_t parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32_t *timeout, uint32_t *delay, uint32_t *packet_size)
 {
     if (ping_args.ip_address->count > 0)
     {
@@ -136,6 +138,9 @@ static esp_err_t parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, u
 
     if (ping_args.delay->count > 0)
 		*delay = *ping_args.delay->ival;
+
+	if (ping_args.packet_size->count > 0)
+		*packet_size = *ping_args.packet_size->ival;
 
 	return ESP_OK;
 }
@@ -173,6 +178,7 @@ static esp_err_t send_icmp(int argc, char **argv)
     uint32_t ping_count     = DEFAULT_COUNT;
     uint32_t ping_timeout   = DEFAULT_TIMEOUT;
     uint32_t ping_delay     = DEFAULT_DELAY;
+	uint32_t packet_size	= DEFAULT_DATA_SIZE;
     // TO DO: IPv6
     ip6_addr_t target_ipv6;
 
@@ -182,10 +188,11 @@ static esp_err_t send_icmp(int argc, char **argv)
         return FAILURE;
     }
 
-    ret = parse_args(&target_ipv4, &target_ipv6, &ping_count, &ping_timeout, &ping_delay);
+    ret = parse_args(&target_ipv4, &target_ipv6, &ping_count, &ping_timeout, &ping_delay, &packet_size);
 
 	if (ret == ESP_OK) {
-		printf("Pinging IP Address \'%s\'\n", inet_ntoa(target_ipv4));
+		printf("PING %s (%s) %d(%d) bytes of data.\n", inet_ntoa(target_ipv4),
+				inet_ntoa(target_ipv4), packet_size, (packet_size + 28)); // ICMP header length is 28 bytes
 		for (counter = 0; counter < ping_count; counter++)
 		{
 			vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -251,6 +258,7 @@ void register_ping(void)
     ping_args.timeout = arg_int0(NULL, "timeout", "<t>", "Connection timeout, ms");
     ping_args.count = arg_int0(NULL, "count", "<n>", "Number of messages");
     ping_args.delay= arg_int0(NULL, "delay", "<t>", "Delay between messges, ms");
+	ping_args.packet_size = arg_int0(NULL, "size", "<n>", "Packet data size, bytes");
     ping_args.end = arg_end(1);
     const esp_console_cmd_t ping_cmd = {
         .command = "ping",
