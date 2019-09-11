@@ -34,6 +34,7 @@
 
 static EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
+volatile static bool is_connected = false;
 
 /** Arguments used by 'join' function */
 static struct {
@@ -49,7 +50,8 @@ static struct {
     struct arg_int *count;
     struct arg_int *timeout;
     struct arg_int *delay;
-	struct arg_int *packet_size;
+    struct arg_int *packet_size;
+    struct arg_int *tos;
     struct arg_end *end;
 } ping_args;
 
@@ -118,14 +120,15 @@ static bool parse_ip_address(const char *address, ip4_addr_t *ipv4, ip6_addr_t *
     return false;
 }
 
-static esp_err_t parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32_t *timeout, uint32_t *delay, uint32_t *packet_size)
+static esp_err_t parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, uint32_t *timeout,
+		uint32_t *delay, uint32_t *packet_size, uint32_t *tos)
 {
     if (ping_args.ip_address->count > 0)
     {
         // Parse IP address (Handle v4 and v6)
         bool rc = parse_ip_address(ping_args.ip_address->sval[0], ip4, ip6);
 		if (!rc) {
-			fprintf(stderr, "Error parsing provided IP address...aborting!\n");
+			ESP_LOGE("ping","Error parsing provided IP address...aborting!\n");
 			return ESP_FAIL;
 		}
     }
@@ -141,6 +144,8 @@ static esp_err_t parse_args(ip4_addr_t *ip4, ip6_addr_t *ip6, uint32_t *count, u
 
 	if (ping_args.packet_size->count > 0)
 		*packet_size = *ping_args.packet_size->ival;
+	if (ping_args.tos->count > 0)
+		*tos = *ping_args.tos->ival;
 
 	return ESP_OK;
 }
@@ -180,6 +185,12 @@ esp_err_t ping_results(ping_target_id_t message_type, esp_ping_found *found_val)
 }
 static esp_err_t send_icmp(int argc, char **argv)
 {
+	if (!is_connected)
+	{
+		ESP_LOGE("ping", "Device is not connected to any AP. Cannot ping host without an IP address\n"
+				"Please associate to an SSID and then use ping!\n");
+		return ESP_FAIL;
+	}
 	esp_err_t ret;
     int counter;
     ip4_addr_t target_ipv4;
@@ -187,7 +198,8 @@ static esp_err_t send_icmp(int argc, char **argv)
     uint32_t ping_count     = DEFAULT_COUNT;
     uint32_t ping_timeout   = DEFAULT_TIMEOUT;
     uint32_t ping_delay     = DEFAULT_DELAY;
-	uint32_t packet_size	= DEFAULT_DATA_SIZE;
+    uint32_t packet_size    = DEFAULT_DATA_SIZE;
+    uint32_t ping_tos       = -1;
     // TO DO: IPv6
     ip6_addr_t target_ipv6;
 
@@ -197,7 +209,8 @@ static esp_err_t send_icmp(int argc, char **argv)
         return FAILURE;
     }
 
-    ret = parse_args(&target_ipv4, &target_ipv6, &ping_count, &ping_timeout, &ping_delay, &packet_size);
+    ret = parse_args(&target_ipv4, &target_ipv6, &ping_count, &ping_timeout, &ping_delay,
+			&packet_size, &ping_tos);
 
 	if (ret == ESP_OK) {
 		printf("PING %s (%s) %d(%d) bytes of data.\n", inet_ntoa(target_ipv4),
@@ -211,6 +224,8 @@ static esp_err_t send_icmp(int argc, char **argv)
 			esp_ping_set_target(PING_TARGET_IP_ADDRESS, &target_ipv4.addr, sizeof(uint32_t));
 			esp_ping_set_target(PING_TARGET_RES_FN, &ping_results, sizeof(ping_results));
 			esp_ping_set_target(PING_TARGET_DATA_LEN, &packet_size, sizeof(uint32_t));
+			if (ping_tos != -1)
+				esp_ping_set_target(PING_TARGET_IP_TOS, &ping_tos, sizeof(uint32_t));
 			ping_init();
 		}
 	} else
@@ -241,6 +256,7 @@ static int connect(int argc, char **argv)
         return 1;
     }
     ESP_LOGI(__func__, "Connected");
+    is_connected = true;
     return 0;
 }
 
@@ -265,10 +281,11 @@ void register_wifi(void)
 void register_ping(void)
 {
     ping_args.ip_address = arg_str0(NULL, NULL, "<IPv4/IPv6>", "Target IP Address");
-    ping_args.timeout = arg_int0(NULL, "timeout", "<t>", "Connection timeout, ms");
-    ping_args.count = arg_int0(NULL, "count", "<n>", "Number of messages");
-    ping_args.delay= arg_int0(NULL, "delay", "<t>", "Delay between messges, ms");
-	ping_args.packet_size = arg_int0(NULL, "size", "<n>", "Packet data size, bytes");
+    ping_args.timeout = arg_int0("t", "timeout", "<t>", "Connection timeout, ms");
+    ping_args.count = arg_int0("c", "count", "<n>", "Number of messages");
+    ping_args.delay= arg_int0("d", "delay", "<t>", "Delay between messges, ms");
+    ping_args.packet_size = arg_int0("s", "size", "<n>", "Packet data size, bytes");
+    ping_args.tos = arg_int0(NULL, "tos", "<n>", "Type of service");
     ping_args.end = arg_end(1);
     const esp_console_cmd_t ping_cmd = {
         .command = "ping",
