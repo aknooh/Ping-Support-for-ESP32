@@ -47,7 +47,8 @@ static struct {
 static bool parse_ip_address(const char *address, ip4_addr_t *ipv4, ip6_addr_t *ipv6)
 {
     // Determine if the address is IPv4 or IPv6
-    char *indicator = address;
+    char *indicator = (char *) malloc(strlen(address));
+    strcpy(indicator, address);
     while(*indicator++)
     {
         if (*indicator == '.') {
