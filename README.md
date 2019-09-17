@@ -21,6 +21,22 @@ https://github.com/aknooh/Ping-Support-for-ESP32.git`
 3) Source `install.sh`: `. ./install.sh`
 4) Export variables from `~/esp-idf/` and compile
 
+
+### Compile / Flash
+This project uses the [Espressif IoT Development
+Framework](https://github.com/espressif/esp-idf). With the ESP-IDF installed,
+execute
+```
+make menuconfig
+```
+and configure the SDK to use your preferred settings (baudrate, python2
+		executable, serial flasher port, …) and proceed to compile and flash
+this project using
+```
+make flash
+```
+
+
 ## Usage
 
 ```bash

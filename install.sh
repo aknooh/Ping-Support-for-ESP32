@@ -8,5 +8,5 @@ PATCH_DIR=$(pwd)/patch_files/lib_changes.diff
 echo "Patch $PATCH_DIR"
 
 (cd ../../.. && git apply --reject $PATCH_DIR)
-cd ../ && mv Ping/ ping/ && cd ping/
+cd ../ && mv Ping-Support-for-ESP32/ ping/ && cd ping/
 
