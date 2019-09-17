@@ -33,7 +33,9 @@ and configure the SDK to use your preferred settings (baudrate, python2
 		executable, serial flasher port, …) and proceed to compile and flash
 this project using
 ```
-make flash
+idf.py build
+idf.py -p /dev/ttyUSB0 flash
+idf.py monitor
 ```
 
 
