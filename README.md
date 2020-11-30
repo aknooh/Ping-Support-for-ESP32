@@ -1,3 +1,6 @@
+### Update (11/30/2020): These changes have been merged into the official [ESP-idf repo](https://github.com/espressif/esp-idf/commit/a77e69c40820873654b288107b60cc685f93227b), therefore archiving this repo. 
+
+
 # Ping Support for ESP32
 
 Ping is one of the most important and most useful tools in the networking world.
